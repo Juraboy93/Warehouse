@@ -1,0 +1,76 @@
+package com.example.warehouse.service;
+
+import com.example.warehouse.dto.ApiResponse;
+import com.example.warehouse.dto.UserDto;
+import com.example.warehouse.entity.User;
+import com.example.warehouse.entity.UserWarehouse;
+import com.example.warehouse.entity.Warehouse;
+import com.example.warehouse.repository.UserRepository;
+import com.example.warehouse.repository.UserWarehouseRepository;
+import com.example.warehouse.repository.WarehouseRepository;
+import lombok.RequiredArgsConstructor;
+import org.springframework.stereotype.Service;
+
+import java.util.List;
+import java.util.Objects;
+import java.util.Optional;
+
+@Service
+@RequiredArgsConstructor
+public class UserService {
+
+    final UserRepository userRepository;
+    final WarehouseRepository warehouseRepository;
+    final UserWarehouseRepository userWarehouseRepository;
+    final AuthService authService;
+
+
+    public ApiResponse edit(Long id, UserDto userDto) {
+        Optional<User> byId1 = userRepository.findById(id);
+        if(byId1.isEmpty())return null;
+        User user = byId1.get();
+        user.setFirstName(userDto.getFirst_name());
+        user.setLastName(userDto.getLast_name());
+        user.setPhoneNumber(userDto.getPhone_number());
+        User save = userRepository.save(user);
+        return new ApiResponse("Saved", true, save);
+    }
+
+    public ApiResponse add(UserDto userDto) {
+        User user=new User();
+        user.setPassword(authService.encryptPassword(userDto.getPassword()));
+        user.setLastName(userDto.getLast_name());
+        user.setFirstName(userDto.getFirst_name());
+        user.setPhoneNumber(userDto.getPhone_number());
+        User user1 = userRepository.findByPhoneNumberAndActiveTrue(userDto.getPhone_number());
+        if(user1==null){
+           userRepository.save(user);
+        }
+
+        return new ApiResponse("saved",true);
+    }
+    public void saveWarehouses(Long id, UserDto userDto){
+        System.out.println(userDto.getWarehouses());
+        Optional<User> saved = userRepository.findById(id);
+        if(saved.isEmpty())return;
+        List<UserWarehouse> allByUser_id = userWarehouseRepository.findAllByUser_Id(id);
+        for (UserWarehouse userWarehouse : allByUser_id) {
+            List<Long> longs = userDto.getWarehouses().stream()
+                    .filter(aLong -> Objects.equals(userWarehouse.getWarehouse().getId(), aLong)).toList();
+            if(longs.size()==0){
+                userWarehouseRepository.deleteById(userWarehouse.getId());
+            }else {
+                userDto.getWarehouses().remove(userWarehouse.getWarehouse().getId());
+            }
+        }
+
+        for (Long warehouseId : userDto.getWarehouses()) {
+            Optional<Warehouse> byId = warehouseRepository.findById(warehouseId);
+            if(byId.isEmpty() || !byId.get().getActive())continue;
+            UserWarehouse userWarehouse=new UserWarehouse();
+            userWarehouse.setUser(saved.get());
+            userWarehouse.setWarehouse(byId.get());
+            userWarehouseRepository.save(userWarehouse);
+        }
+    }
+}
